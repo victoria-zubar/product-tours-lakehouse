@@ -68,12 +68,19 @@ Medallion layers are built with **Lakeflow Spark Declarative Pipelines** (SQL), 
 - **Reconciliation.** Bronze row counts per file are checked against the source files read as plain text.
 - **Event time ≠ ingestion time.** Late events land in the next day's file, so aggregates are based on `event_ts`,
   not on file date.
+- **Quarantine instead of silent drops.** Rows failing validation go to `silver_events_quarantine` with all
+  reject reasons (`concat_ws` of `CASE` branches). Conditions are wrapped in `coalesce(..., false)` so a NULL
+  never makes a row disappear from both tables. Reconciliation: `bronze = clean + quarantine`.
+- **Deduplication with AUTO CDC (SCD1) keyed by `event_id`.** Window functions like `ROW_NUMBER` are not
+  supported over an unbounded stream, and duplicates can arrive in later files; AUTO CDC merges each batch
+  into the target by key, so cross-file duplicates are removed.
 
 ## Roadmap
 
 - [x] Synthetic data generator with realistic data issues
 - [x] Bronze layer (Auto Loader, rescued data, source metadata)
-- [ ] Silver: parsing, expectations, quarantine, deduplication, SCD2 accounts (AUTO CDC)
+- [x] Silver events: parsing, expectations, quarantine, deduplication
+- [ ] Silver dimensions: SCD2 accounts (AUTO CDC), tours
 - [ ] Gold: tour funnel, step drop-off, completion by plan, DAU
 - [ ] AI/BI dashboard
 - [ ] Lakeflow Job: generate → pipeline → quality checks → log
